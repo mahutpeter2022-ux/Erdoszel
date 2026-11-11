@@ -12,3 +12,19 @@ const checkDigit = payload => {
   return (10 - (sum % 10)) % 10;
 };
 const format = d => `VJ-${d.slice(0, 4)}-${d.slice(4, 8)}-${d.slice(8)}`;
+
+
+export function normalizeLicense(input) {
+  const d = String(input || '').replace(/\D/g, '');
+  if (d.length !== 10 || checkDigit(d.slice(0, 9)) !== +d[9]) return null;
+  return format(d);
+}
+
+export function newLicenseNumber(db) {
+  for (let i = 0; i < 50; i++) {
+    const payload = String(randomInt(100000000, 1000000000));
+    const number = format(payload + checkDigit(payload));
+    if (!db.prepare('SELECT 1 FROM licenses WHERE number=?').get(number)) return number;
+  }
+  throw new Error('Nem sikerült  vadászjegy-számot generálni.');
+}
