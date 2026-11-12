@@ -207,3 +207,22 @@ function addColumn(table, col, def) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
   }
 }
+
+ 
+  addColumn('price_list', 'trophy_group', 'TEXT');
+  addColumn('price_list', 'range_min', 'REAL');
+  addColumn('price_list', 'range_max', 'REAL');
+  addColumn('price_list', 'measure', 'TEXT');
+  addColumn('price_list', 'unit_mult', 'REAL');
+  
+  addColumn('users', 'cover_image', 'TEXT');
+  addColumn('users', 'bio', 'TEXT');
+  addColumn('users', 'cover_x', 'INTEGER NOT NULL DEFAULT 50');
+  addColumn('users', 'cover_y', 'INTEGER NOT NULL DEFAULT 50');
+  addColumn('users', 'billing_json', 'TEXT');
+  addColumn('payments', 'billing_json', 'TEXT');
+ 
+  addColumn('game_records', 'trophy_value', 'REAL');
+  addColumn('game_records', 'wounded', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('game_records', 'assessed_by', 'INTEGER');
+  addColumn('game_records', 'assessed_at', 'TEXT');
