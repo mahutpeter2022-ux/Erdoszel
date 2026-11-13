@@ -208,21 +208,38 @@ function addColumn(table, col, def) {
   }
 }
 
- 
-  addColumn('price_list', 'trophy_group', 'TEXT');
-  addColumn('price_list', 'range_min', 'REAL');
-  addColumn('price_list', 'range_max', 'REAL');
-  addColumn('price_list', 'measure', 'TEXT');
-  addColumn('price_list', 'unit_mult', 'REAL');
+addColumn('price_list', 'trophy_group', 'TEXT');
+addColumn('price_list', 'range_min', 'REAL');
+addColumn('price_list', 'range_max', 'REAL');
+addColumn('price_list', 'measure', 'TEXT');
+addColumn('price_list', 'unit_mult', 'REAL');
   
-  addColumn('users', 'cover_image', 'TEXT');
-  addColumn('users', 'bio', 'TEXT');
-  addColumn('users', 'cover_x', 'INTEGER NOT NULL DEFAULT 50');
-  addColumn('users', 'cover_y', 'INTEGER NOT NULL DEFAULT 50');
-  addColumn('users', 'billing_json', 'TEXT');
-  addColumn('payments', 'billing_json', 'TEXT');
+addColumn('users', 'cover_image', 'TEXT');
+addColumn('users', 'bio', 'TEXT');
+addColumn('users', 'cover_x', 'INTEGER NOT NULL DEFAULT 50');
+addColumn('users', 'cover_y', 'INTEGER NOT NULL DEFAULT 50');
+addColumn('users', 'billing_json', 'TEXT');
+addColumn('payments', 'billing_json', 'TEXT');
  
-  addColumn('game_records', 'trophy_value', 'REAL');
-  addColumn('game_records', 'wounded', 'INTEGER NOT NULL DEFAULT 0');
-  addColumn('game_records', 'assessed_by', 'INTEGER');
-  addColumn('game_records', 'assessed_at', 'TEXT');
+addColumn('game_records', 'trophy_value', 'REAL');
+addColumn('game_records', 'wounded', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('game_records', 'assessed_by', 'INTEGER');
+addColumn('game_records', 'assessed_at', 'TEXT');
+
+addColumn('hunting_log', 'kind', "TEXT NOT NULL DEFAULT 'Egyéni'");
+addColumn('hunting_log', 'name', 'TEXT');
+addColumn('hunting_log', 'gamekeeper_id', 'INTEGER');
+addColumn('hunting_log', 'note', 'TEXT');
+addColumn('game_records', 'log_id', 'INTEGER REFERENCES hunting_log(id) ON DELETE SET NULL');
+addColumn('hunts', 'log_id', 'INTEGER');
+ 
+addColumn('users', 'license_no', 'TEXT');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_license ON users(license_no) WHERE license_no IS NOT NULL');
+ 
+addColumn('hunting_areas', 'polygon_json', 'TEXT');
+addColumn('hunting_areas', 'color', 'TEXT');
+syncPriceMeta();
+backfillPaymentItems(db);
+placeAreasOnMap();
+mergeHuntsIntoLog();
+ensureLicenses();
