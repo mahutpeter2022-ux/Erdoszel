@@ -243,3 +243,21 @@ backfillPaymentItems(db);
 placeAreasOnMap();
 mergeHuntsIntoLog();
 ensureLicenses();
+
+function mergeHuntsIntoLog() {
+  const hs = db.prepare('SELECT * FROM hunts WHERE log_id IS NULL').all();
+  if (!hs.length) return;
+  const fallback = db.prepare("SELECT id FROM users WHERE role IN ('vador','admin') ORDER BY role='vador' DESC,id LIMIT 1").get()?.id;
+  const now = localNow();
+  const ins = db.prepare("INSERT INTO hunting_log(hunter_id,area_id,start_datetime,planned_end_datetime,end_datetime,purpose,status,kind,name,gamekeeper_id,note) VALUES (?,?,?,?,?,?,?,'Közös',?,?,?)");
+  const parts = db.prepare('SELECT user_id FROM hunt_participants WHERE hunt_id=?');
+  const addPart = db.prepare('INSERT OR IGNORE INTO log_participants(log_id,user_id) VALUES (?,?)');
+  db.transaction(() => {
+    for (const h of hs) {
+      const hunter = h.gamekeeper_id || fallback; if (!hunter) continue;
+      const start = `${h.date}T${h.start_time || '06:00'}`, end = `${h.date}T${h.end_time || '12:00'}`, past = end < now;
+      db.prepare('UPDATE game_records SET log_id=? WHERE hunt_id=? AND log_id IS NULL').run(id, h.id);
+      db.prepare('UPDATE hunts SET log_id=? WHERE id=?').run(id, h.id);
+    }
+  })();
+}
