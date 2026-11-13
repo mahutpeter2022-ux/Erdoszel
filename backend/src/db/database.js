@@ -261,3 +261,32 @@ function mergeHuntsIntoLog() {
     }
   })();
 }
+export function ensureLicenses() {
+  const users = db.prepare("SELECT id,name,email,phone,membership_date FROM users WHERE role='vadasz' AND license_no IS NULL").all();
+  const insLic = db.prepare("INSERT INTO licenses(number,holder_name,email,phone,amount,status,user_id,purchased_at,used_at) VALUES (?,?,?,?,0,'Felhasználva',?,?,?)");
+  for (const u of users) {
+    const number = newLicenseNumber(db), since = `${u.membership_date || localNow().slice(0, 10)} 00:00:00`;
+    insLic.run(number, u.name, u.email, u.phone || '', u.id, since, since);
+    db.prepare('UPDATE users SET license_no=? WHERE id=?').run(number, u.id);
+  }
+}
+
+
+function placeAreasOnMap() {
+  const missing = db.prepare('SELECT id FROM hunting_areas WHERE polygon_json IS NULL ORDER BY id').all();
+  if (!missing.length) return;
+  const all = db.prepare('SELECT id FROM hunting_areas ORDER BY id').all().map(x => x.id);
+  const up = db.prepare('UPDATE hunting_areas SET polygon_json=? WHERE id=?');
+  for (const m of missing) up.run(JSON.stringify(defaultPolygon(all.indexOf(m.id))), m.id);
+}
+
+
+export function syncPriceMeta() {
+  const upd = db.prepare('UPDATE price_list SET trophy_group=?,range_min=?,range_max=?,measure=?,unit_mult=? WHERE id=?');
+  for (const p of db.prepare('SELECT id,category,name FROM price_list WHERE trophy_group IS NULL').all()) {
+    const m = trophyMeta(p.category, p.name);
+    if (m) upd.run(m.trophy_group, m.range_min, m.range_max, m.measure, m.unit_mult, p.id);
+  }
+ 
+  db.prepare("UPDATE price_list SET price_huf_fixed=CAST(unit AS INTEGER),unit='db' WHERE category='Társasági díjak' AND price_huf_fixed IS NULL AND unit GLOB '[0-9]*'").run();
+}
