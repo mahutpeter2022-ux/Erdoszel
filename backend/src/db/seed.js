@@ -18,7 +18,7 @@ if (!count) {
     ['Farkas Anna','anna@example.hu','vadasz','+36 30 888 9900','2023-04-09','Aktív']
   ];
   for (const u of users) ins.run(u[0],u[1],pw,u[2],u[3],u[4],u[5]);
-  ensureLicenses();   
+  ensureLicenses();  
 
   const si=db.prepare('INSERT INTO species(name,hunting_season) VALUES (?,?)');
   [
@@ -42,5 +42,19 @@ if (!count) {
     const id=db.prepare('SELECT last_insert_rowid() id').get().id;
     for(const s of a[4]) db.prepare('INSERT INTO area_species VALUES (?,?)').run(id,s);
   }
+
+
+  const hi=db.prepare("INSERT INTO hunting_log(hunter_id,area_id,start_datetime,planned_end_datetime,end_datetime,purpose,status,kind,name,gamekeeper_id) VALUES (?,?,?,?,?,?,?,'Közös',?,?)");
+  [
+    ['Őszi gyakorlóvadászat','2026-10-17','06:00','12:00',1,2,[3,4,5]],
+    ['Bőgési szemle','2026-09-19','05:30','10:00',4,2,[3,6,8]],
+    ['Társasvadászat – vaddisznó','2026-08-29','07:00','14:00',2,2,[4,5,6,3]],
+    ['Nyári őzbak-vadászat','2026-07-11','05:00','09:00',3,2,[5,8]]
+  ].forEach(h=>{
+    const past=h[1]<'2026-10-08';
+    hi.run(h[5],h[4],`${h[1]}T${h[2]}`,`${h[1]}T${h[3]}`,past?`${h[1]}T${h[3]}`:null,h[0],past?'Lezárt':'Aktív',h[0],h[5]);
+    const id=db.prepare('SELECT last_insert_rowid() id').get().id;
+    for(const u of h[6])db.prepare('INSERT INTO log_participants VALUES (?,?)').run(id,u);
+  });
 
 } else console.log('Az adatbázis már tartalmaz adatokat.');
