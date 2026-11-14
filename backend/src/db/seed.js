@@ -20,4 +20,14 @@ if (!count) {
   for (const u of users) ins.run(u[0],u[1],pw,u[2],u[3],u[4],u[5]);
   ensureLicenses();  
 
+  const si=db.prepare('INSERT INTO species(name,hunting_season) VALUES (?,?)');
+  [
+    ['Gímszarvas','szept. 1. – jan. 31.'],
+    ['Őz','ápr. 15. – szept. 30. (bak)'],
+    ['Vaddisznó','egész évben'],
+    ['Dámszarvas','okt. 1. – febr. utolsó napja'],
+    ['Muflon','egész évben'],
+    ['Róka','egész évben']
+  ].forEach(x=>si.run(...x));
+
 } else console.log('Az adatbázis már tartalmaz adatokat.');
