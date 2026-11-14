@@ -43,7 +43,7 @@ if (!count) {
     for(const s of a[4]) db.prepare('INSERT INTO area_species VALUES (?,?)').run(id,s);
   }
 
-
+  
   const hi=db.prepare("INSERT INTO hunting_log(hunter_id,area_id,start_datetime,planned_end_datetime,end_datetime,purpose,status,kind,name,gamekeeper_id) VALUES (?,?,?,?,?,?,?,'Közös',?,?)");
   [
     ['Őszi gyakorlóvadászat','2026-10-17','06:00','12:00',1,2,[3,4,5]],
@@ -56,5 +56,14 @@ if (!count) {
     const id=db.prepare('SELECT last_insert_rowid() id').get().id;
     for(const u of h[6])db.prepare('INSERT INTO log_participants VALUES (?,?)').run(id,u);
   });
+
+  const gi=db.prepare('INSERT INTO game_records(hunter_id,species_id,area_id,log_id,date,time,gender,age_group,weight,trophy_data,description,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+  gi.run(3,1,4,2,'2026-09-19','06:12','Hím','Felnőtt',182,'10 ágas, 7,4 kg','Tiszta lövés, a gerincen.','Elfogadva');
+  gi.run(4,3,2,3,'2026-08-29','09:40','Hím','Felnőtt',96,'','','Elfogadva');
+  gi.run(5,2,3,4,'2026-07-11','05:48','Hím','Felnőtt',21,'6 ágas, 340 g','','Elfogadva');
+  gi.run(6,3,2,3,'2026-08-29','11:05','Nőstény','Fiatal',54,'','','Elfogadva');
+  gi.run(3,6,3,null,'2026-10-02','17:30','Nőstény','Felnőtt',6,'','Esti lesen.','Ellenőrzésre vár');
+  gi.run(8,1,4,2,'2026-09-19','07:20','Nőstény','Fiatal',74,'','','Módosításra visszaküldve');
+  gi.run(4,5,3,null,'2026-10-04','08:15','Hím','Felnőtt',1,'','','Ellenőrzésre vár');
 
 } else console.log('Az adatbázis már tartalmaz adatokat.');
