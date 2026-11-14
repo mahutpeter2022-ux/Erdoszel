@@ -18,7 +18,7 @@ if (!count) {
     ['Farkas Anna','anna@example.hu','vadasz','+36 30 888 9900','2023-04-09','Aktív']
   ];
   for (const u of users) ins.run(u[0],u[1],pw,u[2],u[3],u[4],u[5]);
-  ensureLicenses();  
+  ensureLicenses();   
 
   const si=db.prepare('INSERT INTO species(name,hunting_season) VALUES (?,?)');
   [
@@ -29,5 +29,18 @@ if (!count) {
     ['Muflon','egész évben'],
     ['Róka','egész évben']
   ].forEach(x=>si.run(...x));
+
+  const ai=db.prepare('INSERT INTO hunting_areas(name,identifier,area_size,description) VALUES (?,?,?,?)');
+  const areas=[
+    ['Északi terület','E-01',1420,'Idős bükkös, meredek oldalakkal és két tisztással.',[1,2,3]],
+    ['Délkeleti terület','DK-02',980,'Vegyes erdő szántók mentén, jó vaddisznó-állománnyal.',[3,2,6]],
+    ['Völgyi rét','V-03',640,'Nyílt rétek, patakparti égerligetek.',[2,3,6]],
+    ['Tölgyes-gerinc','T-04',1150,'Tölgyes gerinc, őszi bőgési időszak fő területe.',[1,4,3]]
+  ];
+  for(const a of areas){
+    ai.run(a[0],a[1],a[2],a[3]);
+    const id=db.prepare('SELECT last_insert_rowid() id').get().id;
+    for(const s of a[4]) db.prepare('INSERT INTO area_species VALUES (?,?)').run(id,s);
+  }
 
 } else console.log('Az adatbázis már tartalmaz adatokat.');
