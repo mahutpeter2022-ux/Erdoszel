@@ -18,7 +18,7 @@ if (!count) {
     ['Farkas Anna','anna@example.hu','vadasz','+36 30 888 9900','2023-04-09','Aktív']
   ];
   for (const u of users) ins.run(u[0],u[1],pw,u[2],u[3],u[4],u[5]);
-  ensureLicenses();  
+  ensureLicenses();   
 
   const si=db.prepare('INSERT INTO species(name,hunting_season) VALUES (?,?)');
   [
@@ -43,7 +43,7 @@ if (!count) {
     for(const s of a[4]) db.prepare('INSERT INTO area_species VALUES (?,?)').run(id,s);
   }
 
-  
+ 
   const hi=db.prepare("INSERT INTO hunting_log(hunter_id,area_id,start_datetime,planned_end_datetime,end_datetime,purpose,status,kind,name,gamekeeper_id) VALUES (?,?,?,?,?,?,?,'Közös',?,?)");
   [
     ['Őszi gyakorlóvadászat','2026-10-17','06:00','12:00',1,2,[3,4,5]],
@@ -65,5 +65,10 @@ if (!count) {
   gi.run(3,6,3,null,'2026-10-02','17:30','Nőstény','Felnőtt',6,'','Esti lesen.','Ellenőrzésre vár');
   gi.run(8,1,4,2,'2026-09-19','07:20','Nőstény','Fiatal',74,'','','Módosításra visszaküldve');
   gi.run(4,5,3,null,'2026-10-04','08:15','Hím','Felnőtt',1,'','','Ellenőrzésre vár');
+
+  const li=db.prepare('INSERT INTO hunting_log(hunter_id,area_id,start_datetime,planned_end_datetime,end_datetime,purpose,status) VALUES (?,?,?,?,?,?,?)');
+  li.run(3,1,'2026-10-06T06:30','2026-10-06T11:00',null,'Vaddisznó-megfigyelés','Aktív');
+  li.run(4,2,'2026-10-06T07:00','2026-10-06T12:00',null,'Les, vaddisznó','Aktív');
+  li.run(8,4,'2026-10-04T16:00','2026-10-04T19:30','2026-10-04T19:10','Szarvas-szemle','Lezárt');
 
 } else console.log('Az adatbázis már tartalmaz adatokat.');
