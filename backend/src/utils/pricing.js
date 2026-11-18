@@ -5,17 +5,14 @@ const round6 = n => Math.round(n * 1e6) / 1e6;
 const huf = n => Math.round(n).toLocaleString('hu-HU') + ' Ft';
 const fmt = (n, d = 3) => Number(n).toLocaleString('hu-HU', { maximumFractionDigits: d });
 
-
-
 const GROUPS = [
   { category: 'Gímszarvas bika',    test: /^Agancs/,           group: 'Gímszarvas bika', measure: 'kg', mult: 100 },
   { category: 'Dámszarvas',         test: /^Bika – agancs/,    group: 'Dámszarvas bika', measure: 'kg', mult: 100 },
   { category: 'Őz',                 test: /^Bak –/,            group: 'Őz bak',          measure: 'g',  mult: 1 },
   { category: 'Muflon',             test: /^Kos –/,            group: 'Muflon kos',      measure: 'cm', mult: 1 },
-  { category: 'Vaddisznó (egyéni)', test: /^Kan – agyar/,      group: 'Vaddisznó kan',   measure: 'cm', mult: 10 }, // felár: mm-enként
+  { category: 'Vaddisznó (egyéni)', test: /^Kan – agyar/,      group: 'Vaddisznó kan',   measure: 'cm', mult: 10 }, 
 ];
 const LIMITS = { kg: 30, g: 2000, cm: 100 };
-
 
 export function trophyMeta(category, name) {
   const g = GROUPS.find(x => x.category === category && x.test.test(name));
@@ -38,7 +35,8 @@ function trophyLine(db, it, eur) {
   let value = Number(String(it.value ?? '').replace(',', '.'));
   if (!Number.isFinite(value) || value <= 0 || value > LIMITS[measure])
     return { error: `Adj meg érvényes értéket (${measure}): ${group}.` };
-  if (measure === 'g') value = Math.floor(value + 1e-9);          
+  if (measure === 'g') value = Math.floor(value + 1e-9);         
+
 
   let row = rows[0];
   for (const r of rows) if (r.range_min <= value + 1e-9) row = r;
@@ -74,6 +72,7 @@ function kgLine(db, it, eur) {
   };
 }
 
+
 const TROPHY_UI = {
   'Gímszarvas bika': { what: 'Agancs súlya', measure: 'kg', step: 0.01, max: 20 },
   'Dámszarvas bika': { what: 'Agancs súlya', measure: 'kg', step: 0.01, max: 9 },
@@ -84,6 +83,7 @@ const TROPHY_UI = {
 const trophyPlan = group => ({ type: 'trophy', group, ...TROPHY_UI[group], canWound: group === 'Gímszarvas bika' || group === 'Vaddisznó kan' });
 const fixedPlan = (category, name) => ({ type: 'fixed', category, name, woundName: name.includes('– elejtés') ? name.replace('– elejtés', '– sebzés') : null });
 const lc = s => String(s || '').toLowerCase();
+
 
 export function feePlan(k) {
   const sp = lc(k.species_name), male = k.gender === 'Hím', young = k.age_group === 'Fiatal', w = +k.weight || 0;
@@ -103,4 +103,30 @@ export function feePlan(k) {
     return male ? trophyPlan('Vaddisznó kan') : fixedPlan('Vaddisznó (egyéni)', 'Koca – elejtés');
   }
   return { type: 'none' };
+}
+
+const priceRow = (db, category, name) => db.prepare('SELECT * FROM price_list WHERE category=? AND name=?').get(category, name);
+
+
+
+export function killFee(db, k, plan = feePlan(k), eur = eurHuf()) {
+  const wounded = !!k.wounded;
+  if (plan.type === 'none') return { error: `Ehhez a vadhoz (${k.species_name}) nincs díjtétel.` };
+  if (plan.type === 'fixed') {
+    let row = priceRow(db, plan.category, plan.name);
+    if (wounded) { if (!plan.woundName) return { error: 'Sebzés ennél a vadnál nem számolható.' }; row = priceRow(db, plan.category, plan.woundName); }
+    if (!row) return { error: 'Nincs megfelelő díjtétel az árlistában.' };
+    return { total: baseHuf(row, eur), label: row.name, detail: row.name };
+  }
+  if (wounded && !plan.canWound) return { error: 'Sebzés ennél a vadnál nem számolható.' };
+  if (wounded && plan.group === 'Vaddisznó kan') {            
+    const row = priceRow(db, 'Vaddisznó (egyéni)', 'Kan – sebzés (agyarmérettől függetlenül)');
+    if (!row) return { error: 'Nincs megfelelő díjtétel az árlistában.' };
+    return { total: baseHuf(row, eur), label: 'Vaddisznó kan – sebzés', detail: row.name };
+  }
+  if (k.trophy_value == null) return { pending: true };
+  if (plan.max && k.trophy_value > plan.max) return { error: `A megadott érték irreálisan nagy (legfeljebb ${plan.max} ${plan.measure}) – ellenőrizd a mérést.` };
+  const t = trophyLine(db, { group: plan.group, value: k.trophy_value, wounded }, eur);
+  if (t.error) return { error: t.error };
+  return { total: t.total, label: t.label, detail: t.detail };
 }
