@@ -5,6 +5,8 @@ const round6 = n => Math.round(n * 1e6) / 1e6;
 const huf = n => Math.round(n).toLocaleString('hu-HU') + ' Ft';
 const fmt = (n, d = 3) => Number(n).toLocaleString('hu-HU', { maximumFractionDigits: d });
 
+
+
 const GROUPS = [
   { category: 'Gímszarvas bika',    test: /^Agancs/,           group: 'Gímszarvas bika', measure: 'kg', mult: 100 },
   { category: 'Dámszarvas',         test: /^Bika – agancs/,    group: 'Dámszarvas bika', measure: 'kg', mult: 100 },
@@ -13,6 +15,7 @@ const GROUPS = [
   { category: 'Vaddisznó (egyéni)', test: /^Kan – agyar/,      group: 'Vaddisznó kan',   measure: 'cm', mult: 10 }, 
 ];
 const LIMITS = { kg: 30, g: 2000, cm: 100 };
+
 
 export function trophyMeta(category, name) {
   const g = GROUPS.find(x => x.category === category && x.test.test(name));
@@ -23,4 +26,50 @@ export function trophyMeta(category, name) {
   else if ((m = name.match(/(\d+(?:,\d+)?)\s*(?:kg|g|cm)?\s*-t[óő]l/))) { min = num(m[1]); }
   else return null;
   return { trophy_group: g.group, measure: g.measure, unit_mult: g.mult, range_min: min, range_max: max };
+}
+
+const baseHuf = (p, eur) => p.price_huf_fixed ?? Math.round((p.price_eur || 0) * eur);
+
+function trophyLine(db, it, eur) {
+  const group = String(it.group || '');
+  const rows = db.prepare('SELECT * FROM price_list WHERE trophy_group=? ORDER BY range_min').all(group);
+  if (!rows.length) return { error: 'Ismeretlen trófea-kategória.' };
+  const measure = rows[0].measure;
+  let value = Number(String(it.value ?? '').replace(',', '.'));
+  if (!Number.isFinite(value) || value <= 0 || value > LIMITS[measure])
+    return { error: `Adj meg érvényes értéket (${measure}): ${group}.` };
+  if (measure === 'g') value = Math.floor(value + 1e-9);         
+ 
+  let row = rows[0];
+  for (const r of rows) if (r.range_min <= value + 1e-9) row = r;
+
+  const base = baseHuf(row, eur);
+  const extraHuf = (row.extra_eur || 0) * eur;
+  const units = extraHuf > 0 ? Math.floor(round6((value - row.range_min) * row.unit_mult)) : 0;
+  let total = base + units * extraHuf;
+  const wounded = !!it.wounded && group === 'Gímszarvas bika';
+  if (wounded) total *= 0.5;                                   
+
+  const parts = [`Sáv: ${row.name}`, `alapdíj ${huf(base)}`];
+  if (units) parts.push(`felár ${/^\d/.test(row.unit) ? `${units} × ${row.unit}` : `${units} ${row.unit}`} (${fmt(extraHuf, 1)} Ft / ${row.unit})`);
+  if (wounded) parts.push('sebzés: 50%');
+  return {
+    kind: 'trophy', id: row.id, group, value, units, wounded,
+    label: `${group} – ${fmt(value)} ${measure}${wounded ? ' (sebzés)' : ''}`,
+    total: Math.round(total), detail: parts.join(' · '),
+  };
+}
+
+function kgLine(db, it, eur) {
+  const p = db.prepare('SELECT * FROM price_list WHERE id=?').get(+it.id);
+  if (!p || p.unit !== 'kg') return { error: 'Ismeretlen kilós tétel.' };
+  const kg = Math.round(Number(String(it.kg ?? '').replace(',', '.')) * 1000) / 1000;
+  if (!Number.isFinite(kg) || kg <= 0) return { error: `Add meg a mennyiséget kilogrammban: ${p.name}` };
+  if (kg > 1000) return { error: 'Túl nagy mennyiség.' };
+  const perKg = (p.extra_eur || 0) * eur;
+  const total = Math.round(baseHuf(p, eur) + kg * perKg);
+  return {
+    kind: 'kg', id: p.id, kg, label: `${p.name}: ${fmt(kg)} kg`, total,
+    detail: `${fmt(kg)} kg × ${fmt(perKg, 1)} Ft / kg`,
+  };
 }
