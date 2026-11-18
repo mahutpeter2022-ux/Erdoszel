@@ -12,7 +12,7 @@ const GROUPS = [
   { category: 'Dámszarvas',         test: /^Bika – agancs/,    group: 'Dámszarvas bika', measure: 'kg', mult: 100 },
   { category: 'Őz',                 test: /^Bak –/,            group: 'Őz bak',          measure: 'g',  mult: 1 },
   { category: 'Muflon',             test: /^Kos –/,            group: 'Muflon kos',      measure: 'cm', mult: 1 },
-  { category: 'Vaddisznó (egyéni)', test: /^Kan – agyar/,      group: 'Vaddisznó kan',   measure: 'cm', mult: 10 }, 
+  { category: 'Vaddisznó (egyéni)', test: /^Kan – agyar/,      group: 'Vaddisznó kan',   measure: 'cm', mult: 10 }, // felár: mm-enként
 ];
 const LIMITS = { kg: 30, g: 2000, cm: 100 };
 
@@ -38,8 +38,8 @@ function trophyLine(db, it, eur) {
   let value = Number(String(it.value ?? '').replace(',', '.'));
   if (!Number.isFinite(value) || value <= 0 || value > LIMITS[measure])
     return { error: `Adj meg érvényes értéket (${measure}): ${group}.` };
-  if (measure === 'g') value = Math.floor(value + 1e-9);         
- 
+  if (measure === 'g') value = Math.floor(value + 1e-9);          
+
   let row = rows[0];
   for (const r of rows) if (r.range_min <= value + 1e-9) row = r;
 
@@ -48,7 +48,7 @@ function trophyLine(db, it, eur) {
   const units = extraHuf > 0 ? Math.floor(round6((value - row.range_min) * row.unit_mult)) : 0;
   let total = base + units * extraHuf;
   const wounded = !!it.wounded && group === 'Gímszarvas bika';
-  if (wounded) total *= 0.5;                                   
+  if (wounded) total *= 0.5;                                     
 
   const parts = [`Sáv: ${row.name}`, `alapdíj ${huf(base)}`];
   if (units) parts.push(`felár ${/^\d/.test(row.unit) ? `${units} × ${row.unit}` : `${units} ${row.unit}`} (${fmt(extraHuf, 1)} Ft / ${row.unit})`);
@@ -72,4 +72,35 @@ function kgLine(db, it, eur) {
     kind: 'kg', id: p.id, kg, label: `${p.name}: ${fmt(kg)} kg`, total,
     detail: `${fmt(kg)} kg × ${fmt(perKg, 1)} Ft / kg`,
   };
+}
+
+const TROPHY_UI = {
+  'Gímszarvas bika': { what: 'Agancs súlya', measure: 'kg', step: 0.01, max: 20 },
+  'Dámszarvas bika': { what: 'Agancs súlya', measure: 'kg', step: 0.01, max: 9 },
+  'Őz bak':          { what: 'Agancs súlya', measure: 'g',  step: 1, max: 700 },
+  'Muflon kos':      { what: 'Szarvhossz (csiga)', measure: 'cm', step: 0.1, max: 100 },
+  'Vaddisznó kan':   { what: 'Agyarhossz', measure: 'cm', step: 0.1, max: 35 },
+};
+const trophyPlan = group => ({ type: 'trophy', group, ...TROPHY_UI[group], canWound: group === 'Gímszarvas bika' || group === 'Vaddisznó kan' });
+const fixedPlan = (category, name) => ({ type: 'fixed', category, name, woundName: name.includes('– elejtés') ? name.replace('– elejtés', '– sebzés') : null });
+const lc = s => String(s || '').toLowerCase();
+
+export function feePlan(k) {
+  const sp = lc(k.species_name), male = k.gender === 'Hím', young = k.age_group === 'Fiatal', w = +k.weight || 0;
+  if (sp.includes('gímszarvas')) {
+    if (male) return young ? fixedPlan('Gímszarvas bika', 'Csapos bika') : trophyPlan('Gímszarvas bika');
+    return young ? fixedPlan('Gímszarvas tehén, ünő, borjú', 'Borjú – elejtés') : fixedPlan('Gímszarvas tehén, ünő, borjú', 'Tehén vagy ünő – elejtés');
+  }
+  if (sp.includes('dámszarvas')) {
+    if (male && !young) return trophyPlan('Dámszarvas bika');
+    return young ? fixedPlan('Dámszarvas', 'Borjú – elejtés') : fixedPlan('Dámszarvas', 'Tehén vagy ünő – elejtés');
+  }
+  if (sp.startsWith('őz')) return male && !young ? trophyPlan('Őz bak') : fixedPlan('Őz', 'Suta vagy gida – elejtés');
+  if (sp.includes('muflon')) return male && !young ? trophyPlan('Muflon kos') : fixedPlan('Muflon', 'Jerke vagy bárány – elejtés');
+  if (sp.includes('vaddisznó')) {
+    if (w > 0 && w <= 20) return fixedPlan('Vaddisznó (egyéni)', 'Malac (20 kg-ig) – elejtés');
+    if (w > 0 && w <= 50) return fixedPlan('Vaddisznó (egyéni)', 'Süldő (20–50 kg) – elejtés');
+    return male ? trophyPlan('Vaddisznó kan') : fixedPlan('Vaddisznó (egyéni)', 'Koca – elejtés');
+  }
+  return { type: 'none' };
 }
