@@ -5,6 +5,7 @@ const round6 = n => Math.round(n * 1e6) / 1e6;
 const huf = n => Math.round(n).toLocaleString('hu-HU') + ' Ft';
 const fmt = (n, d = 3) => Number(n).toLocaleString('hu-HU', { maximumFractionDigits: d });
 
+
 const GROUPS = [
   { category: 'Gímszarvas bika',    test: /^Agancs/,           group: 'Gímszarvas bika', measure: 'kg', mult: 100 },
   { category: 'Dámszarvas',         test: /^Bika – agancs/,    group: 'Dámszarvas bika', measure: 'kg', mult: 100 },
@@ -13,6 +14,7 @@ const GROUPS = [
   { category: 'Vaddisznó (egyéni)', test: /^Kan – agyar/,      group: 'Vaddisznó kan',   measure: 'cm', mult: 10 }, 
 ];
 const LIMITS = { kg: 30, g: 2000, cm: 100 };
+
 
 export function trophyMeta(category, name) {
   const g = GROUPS.find(x => x.category === category && x.test.test(name));
@@ -108,7 +110,6 @@ export function feePlan(k) {
 const priceRow = (db, category, name) => db.prepare('SELECT * FROM price_list WHERE category=? AND name=?').get(category, name);
 
 
-
 export function killFee(db, k, plan = feePlan(k), eur = eurHuf()) {
   const wounded = !!k.wounded;
   if (plan.type === 'none') return { error: `Ehhez a vadhoz (${k.species_name}) nincs díjtétel.` };
@@ -119,7 +120,7 @@ export function killFee(db, k, plan = feePlan(k), eur = eurHuf()) {
     return { total: baseHuf(row, eur), label: row.name, detail: row.name };
   }
   if (wounded && !plan.canWound) return { error: 'Sebzés ennél a vadnál nem számolható.' };
-  if (wounded && plan.group === 'Vaddisznó kan') {            
+  if (wounded && plan.group === 'Vaddisznó kan') {         
     const row = priceRow(db, 'Vaddisznó (egyéni)', 'Kan – sebzés (agyarmérettől függetlenül)');
     if (!row) return { error: 'Nincs megfelelő díjtétel az árlistában.' };
     return { total: baseHuf(row, eur), label: 'Vaddisznó kan – sebzés', detail: row.name };
@@ -129,4 +130,52 @@ export function killFee(db, k, plan = feePlan(k), eur = eurHuf()) {
   const t = trophyLine(db, { group: plan.group, value: k.trophy_value, wounded }, eur);
   if (t.error) return { error: t.error };
   return { total: t.total, label: t.label, detail: t.detail };
+}
+
+function killLine(db, it, eur, user) {
+  const k = db.prepare('SELECT g.*,s.name AS species_name FROM game_records g JOIN species s ON s.id=g.species_id WHERE g.id=?').get(+it.kill_id);
+  if (!k) return { error: 'Ismeretlen elejtés.' };
+  if (!user || (k.hunter_id !== user.id && !['admin', 'vador'].includes(user.role))) return { error: 'Csak a saját elejtésed díját fizetheted.' };
+  if (k.status !== 'Elfogadva') return { error: 'Csak elfogadott (elbírált) elejtés díja fizethető.' };
+  const f = killFee(db, k, feePlan(k), eur);
+  if (f.pending) return { error: 'A trófea bírálata még nem történt meg – a vadőr adja meg a mért értéket.' };
+  if (f.error) return { error: f.error };
+  return { kind: 'kill', id: k.id, kill_id: k.id, label: `${k.species_name} – ${k.date} (${f.label})`, total: f.total, detail: f.detail };
+}
+
+function itemLine(db, it, eur) {
+  const p = db.prepare('SELECT * FROM price_list WHERE id=?').get(+it.id);
+  if (!p) return { error: 'Ismeretlen tétel.' };
+  if (p.trophy_group) return { error: `„${p.name}” tételhez használd a trófea-kalkulátort.` };
+  const base = baseHuf(p, eur), extra = (p.extra_eur || 0) * eur;
+  if (!base && !extra) return { error: `Egyedi elbírálású tétel, online nem fizethető: ${p.name}` };
+  const qty = Math.max(1, Math.min(20, Math.floor(+it.qty) || 1));
+  const units = Math.max(0, Math.min(100000, +it.units || 0));
+  if (!base && !units) return { error: `Add meg a mennyiséget: ${p.name}` };
+  const total = Math.round(qty * base + units * extra);
+  const label = qty > 1 ? `${p.name} × ${qty}` : p.name;
+  return { kind: 'item', id: p.id, qty, units, label, total, detail: units ? `${fmt(units)} ${p.unit} × ${fmt(extra, 1)} Ft` : '' };
+}
+
+
+export function resolveItems(db, items, eur = eurHuf(), user = null) {
+  if (!Array.isArray(items) || !items.length) return { error: 'A kosár üres.' };
+  if (items.length > 30) return { error: 'Túl sok tétel a kosárban.' };
+  const lines = []; let total = 0;
+  for (const it of items) {
+    const kind = it?.kind || 'item';
+    const line = kind === 'kill' ? killLine(db, it, eur, user) : kind === 'trophy' ? trophyLine(db, it, eur) : kind === 'kg' ? kgLine(db, it, eur) : itemLine(db, it, eur);
+    if (line.error) return { error: line.error };
+    line.name = line.label;                                       
+    total += line.total; lines.push(line);
+  }
+  return { lines, total };
+}
+
+
+export function checkKill(db, killId, user) {
+  const k = db.prepare('SELECT id,hunter_id FROM game_records WHERE id=?').get(+killId);
+  if (!k) return { error: 'Ismeretlen elejtés.' };
+  if (k.hunter_id !== user.id && !['admin', 'vador'].includes(user.role)) return { error: 'Csak a saját elejtésedhez kapcsolhatsz díjat.' };
+  return { id: k.id };
 }
